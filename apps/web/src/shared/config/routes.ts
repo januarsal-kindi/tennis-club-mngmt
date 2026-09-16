@@ -3,6 +3,7 @@ export const ROUTES = {
   admin: {
     root: "/admin",
     dashboard: "/admin/dashboard",
+    courts: "/admin/courts",
   },
   customer: {
     root: "/customer",

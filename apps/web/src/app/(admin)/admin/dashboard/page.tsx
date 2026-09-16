@@ -1,5 +1,7 @@
+import { ROUTES } from "@/shared/config";
+
 const ADMIN_SECTIONS = [
-  { label: "Courts & Schedule", href: "#", desc: "Manage courts, weekly hours, blackout dates" },
+  { label: "Courts & Schedule", href: ROUTES.admin.courts, desc: "Manage courts, weekly hours, blackout dates" },
   { label: "Coaching Sessions", href: "#", desc: "Create sessions, assign coaches, manage capacity" },
   { label: "Payments Queue", href: "#", desc: "Verify pending payments, waive fees" },
   { label: "Members & Coaches", href: "#", desc: "View directory, club NTRP-style ratings, growth history" },
