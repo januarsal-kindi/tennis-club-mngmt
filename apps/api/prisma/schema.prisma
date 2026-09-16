@@ -50,3 +50,39 @@ model Session {
   @@index([userId])
   @@map("sessions")
 }
+
+model Court {
+  id          String            @id @default(uuid())
+  name        String
+  active      Boolean           @default(true)
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+  weeklyHours CourtWeeklyHour[]
+  blackouts   CourtBlackout[]
+
+  @@map("courts")
+}
+
+model CourtWeeklyHour {
+  id         String @id @default(uuid())
+  courtId    String @map("court_id")
+  weekday    Int
+  startLocal String @map("start_local")
+  endLocal   String @map("end_local")
+  court      Court  @relation(fields: [courtId], references: [id], onDelete: Cascade)
+
+  @@unique([courtId, weekday])
+  @@map("court_weekly_hours")
+}
+
+model CourtBlackout {
+  id      String   @id @default(uuid())
+  courtId String   @map("court_id")
+  start   DateTime
+  end     DateTime
+  reason  String?
+  court   Court    @relation(fields: [courtId], references: [id], onDelete: Cascade)
+
+  @@index([courtId])
+  @@map("court_blackouts")
+}
