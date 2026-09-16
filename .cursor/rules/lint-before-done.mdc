@@ -1,0 +1,15 @@
+---
+description: Run the project linter before marking a task done or opening a PR (FE and BE).
+globs:
+alwaysApply: true
+---
+
+# Lint before done
+
+Before marking any task complete or opening a PR:
+
+1. Run the project linter for the package you changed (FE and/or BE).
+2. Fix all reported issues (or document why a finding is deferred).
+3. Do not claim done while lint is failing.
+
+If no linter is configured yet, add a minimal one as part of foundation tasks, then run it.

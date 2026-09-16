@@ -1,0 +1,53 @@
+---
+description: Directory architecture and where shared code lives
+globs:
+alwaysApply: true
+---
+
+# Directory architecture
+
+```
+src/
+  main.ts             # bootstrap only: Nest factory, Swagger, listen
+  app.module.ts       # root module: ConfigModule + feature modules
+  app.setup.ts        # configureApp(): global pipes, reused by main.ts AND e2e tests
+  config/             # env validation (Joi schema) + its spec
+  prisma/             # PrismaModule / PrismaService (global provider)
+  modules/<feature>/  # one folder per feature module
+  shared/             # code used by 2+ modules
+test/                 # *.e2e-spec.ts, setup-env.ts, shared test helpers
+prisma/               # schema.prisma + migrations
+```
+
+## Feature module layout
+
+Everything a feature owns stays inside `src/modules/<feature>/`:
+
+```
+modules/auth/
+  auth.module.ts        # wiring, providers, exports
+  auth.controller.ts    # HTTP surface + Swagger decorators
+  auth.service.ts       # business logic
+  auth.constants.ts     # TTLs, limits — no magic numbers in services
+  dto/                  # request/response shapes with class-validator
+  guards/               # route guards
+```
+
+File names are `<name>.<role>.ts` (`auth-cookies.service.ts`, `session-auth.guard.ts`, `public-user.dto.ts`). Never reach into another module's internals — import only what its module `exports`.
+
+## Shared code
+
+When the same logic is needed by a **second** module, move it to `src/shared/` and import it from both. Do not copy-paste, and do not pre-create a shared helper for a single caller (see ponytail: YAGNI).
+
+```typescript
+// ❌ BAD — same normalization pasted in two modules
+// modules/auth/dto/register.dto.ts AND modules/chat/dto/create-chat.dto.ts
+@Transform(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value)
+
+// ✅ GOOD — one home, both import it
+// src/shared/normalize.ts
+export const normalizeEmail = ({ value }: TransformFnParams) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : value;
+```
+
+Test-only helpers duplicated across e2e specs belong in a `test/` helper file, not `src/shared` — `src/` ships to `dist/`.

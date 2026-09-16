@@ -1,0 +1,115 @@
+---
+description: Structure and review frontend code using Feature-Sliced Design (FSD v2.1). Applies when building features, adding files/components, deciding where code belongs, or organizing imports in the Tennis Club frontend.
+globs: src/**/*
+alwaysApply: true
+---
+
+# Feature-Sliced Design (FSD v2.1)
+
+Core principle: **"Start simple, extract when needed."** Place code in `pages/`
+first. Extract to a lower layer only when the same code is *currently* used in
+multiple places (not hypothetically), the usages don't always change together,
+and the boundary has a focused responsibility.
+
+See [reference.md](reference.md) for the decision table, cross-import strategies,
+shared-layer guide, and anti-patterns.
+
+## Layers (highest → lowest)
+
+```
+app/       → App init, providers, routing, global theme
+pages/     → Route-level composition, owns its own logic
+widgets/   → Large composite UI blocks reused across multiple pages
+features/  → Reusable user interactions (only when used in 2+ places)
+entities/  → Reusable business domain models (only when used in 2+ places)
+shared/    → Infrastructure with no business logic (UI kit, utils, API client)
+```
+
+Not all layers are required. **Start with `app/` + `pages/` + `shared/`.** Add
+`widgets/`, `features/`, `entities/` only when they provide clear value. Never
+create empty layer folders "just in case." (`processes/` is deprecated in v2.1.)
+
+## Golden Rule
+
+When in doubt, keep it in `pages/`. Extraction is a project-wide design decision
+— keep the threshold high.
+
+## Import rules (MUST)
+
+1. **Downward only:** `app → pages → widgets → features → entities → shared`.
+   Upward imports are forbidden.
+2. **No same-layer cross-imports** between slices. Resolve via Section 7 in
+   `reference.md` (merge, push to entities, compose from parent, or public API).
+3. **Public API:** import a slice only through its `index.ts`. Deep imports into
+   `ui/`, `model/`, etc. from outside the slice are forbidden.
+   - `shared` has no slices — give each *segment* its own public API
+     (`shared/ui/index.ts`, `shared/api/index.ts`), not one top-level barrel.
+
+```ts
+// ✅ Allowed
+import { Button } from "@/shared/ui";          // features → shared
+import { useUser } from "@/entities/user";     // pages → entities
+
+// ❌ Violation
+import { LoginForm } from "@/features/auth/ui/LoginForm"; // bypasses index.ts
+import { likePost } from "@/features/like-post";          // features → features
+```
+
+## Decision framework
+
+1. **Used in only one page?** Keep it in that `pages/` slice.
+2. **Reusable infrastructure, no business logic?** → `shared/` (`ui`, `lib`,
+   `api`, `config`, `auth`). CRUD and auth tokens/session always go in `shared`.
+3. **A complete user action, currently used in 2+ places, stable boundary?**
+   → `features/`. Otherwise keep it in the page.
+4. **A domain model, currently used in 2+ places, stable boundary?**
+   → `entities/`. Otherwise keep it in the page.
+5. **App-wide config** (providers, router, theme) → `app/`.
+
+Be conservative with `entities` — it's imported almost everywhere, so changes
+propagate widely. A domain type used in one page stays in that page.
+
+## Segments (inside a slice)
+
+`ui/` (components) · `model/` (state, logic, validation, types) · `api/`
+(requests, DTOs) · `lib/` (slice-local helpers) · `config/` (constants, flags).
+Create only the segments a slice actually uses.
+
+`app/` and `shared/` have **no slices** — organize them directly by segment.
+
+## File naming (MUST)
+
+Name files after the **business domain**, never the technical role.
+
+```
+✅ model/message.ts   api/fetch-chat.ts   lib/render-markdown.ts
+❌ model/types.ts      model/utils.ts       lib/helpers.ts
+```
+
+## This repo's domain (from DESIGN.md)
+
+The Tennis Club frontend is a thin client — start minimal. Likely mapping *once
+reuse is confirmed*:
+
+- `pages`: `chat`, `chat-empty`, `markdown-sources` — start here; keep
+  page-specific UI, fetching, and state local.
+- `shared/ui`: Radix-icon wrappers, glass surface, buttons, citation pills;
+  `shared/config`: the Lumen design tokens; `shared/api`: chat CRUD client.
+- `features` (extract only on 2+ use): `send-message`, `attach-file`, `pin-chat`,
+  `switch-theme`.
+- `entities` (extract only on 2+ use): `chat`, `message`, `user`, `citation`,
+  `attachment`.
+- `widgets` (extract only on 2+ page reuse): `sidebar`, `composer`,
+  `markdown-message`, `sources-panel`, `user-panel`.
+
+## Validate
+
+Steiger is the official FSD linter. Add it only if the project already lints:
+
+```bash
+npm install -D @feature-sliced/steiger
+npx steiger src
+```
+
+Key rules: `insignificant-slice` (merge a single-use entity/feature back into its
+page), `excessive-slicing` (too many slices in a layer).
