@@ -3,8 +3,12 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, login } from "@/shared/api";
-import { portalForRole, ROLE_HINT_COOKIE, setRoleHintCookie } from "@/shared/auth";
-import { isRole } from "@/shared/auth";
+import {
+  ROLE_HINT_COOKIE,
+  isRole,
+  portalForRole,
+  setRoleHintCookie,
+} from "@/shared/auth";
 import type { Role } from "@/shared/config";
 
 /**
@@ -31,10 +35,10 @@ export default function LoginPage() {
     } catch (err) {
       const network =
         err instanceof TypeError ||
-        (err instanceof ApiError && err.status >= 500) ||
+        (err instanceof ApiError && (err.status >= 500 || err.status === 404)) ||
         (err instanceof Error && /failed to fetch|network|load failed/i.test(err.message));
 
-      if (network || (err instanceof ApiError && err.status === 404)) {
+      if (network) {
         // Offline fallback: set `tc_role` only — no `tc_session`.
         setRoleHintCookie(offlineRole);
         router.replace(portalForRole(offlineRole));

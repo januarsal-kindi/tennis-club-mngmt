@@ -52,7 +52,7 @@ export function courtsApiSource(): CourtsSource | null {
 
 export async function resolveCourtsApiSource(): Promise<CourtsSource> {
   if (source) return source;
-  // TODO(BE-3): drop mock once GET /api/v1/courts is on main.
+  // TODO(BE-3): drop mock once GET /api/v1/courts is on main / contract published.
   source = (await courtsRouteExists()) ? "live" : "mock";
   return source;
 }
@@ -67,7 +67,10 @@ export async function listCourts(): Promise<Court[]> {
 export async function createCourt(input: { name: string; active?: boolean }): Promise<Court> {
   const name = input.name.trim();
   if ((await resolveCourtsApiSource()) === "live") {
-    return apiFetch<Court>("/courts", { method: "POST", body: JSON.stringify({ name, active: input.active ?? true }) });
+    return apiFetch<Court>("/courts", {
+      method: "POST",
+      body: JSON.stringify({ name, active: input.active ?? true }),
+    });
   }
   const db = readMock();
   const court: Court = { id: crypto.randomUUID(), name, active: input.active ?? true };
@@ -137,7 +140,10 @@ export async function createBlackout(
   input: { start: string; end: string; reason?: string },
 ): Promise<Blackout> {
   if ((await resolveCourtsApiSource()) === "live") {
-    return apiFetch<Blackout>(`/courts/${courtId}/blackouts`, { method: "POST", body: JSON.stringify(input) });
+    return apiFetch<Blackout>(`/courts/${courtId}/blackouts`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   }
   const db = readMock();
   const blackout: Blackout = {
@@ -225,5 +231,6 @@ function readMock(): MockDb {
 }
 
 function writeMock(db: MockDb) {
+  if (typeof window === "undefined") return;
   localStorage.setItem(MOCK_KEY, JSON.stringify(db));
 }
