@@ -1,2 +1,27 @@
+# dependencies
 node_modules/
-.env*.local
+
+# build outputs
+dist/
+build/
+.next/
+.turbo/
+
+# test coverage
+coverage/
+
+# environment
+.env
+.env.*
+!.env.example
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# logs
+*.log
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

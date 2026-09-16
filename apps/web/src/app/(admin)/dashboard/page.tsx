@@ -2,7 +2,7 @@ const ADMIN_SECTIONS = [
   { label: "Courts & Schedule", href: "#", desc: "Manage courts, weekly hours, blackout dates" },
   { label: "Coaching Sessions", href: "#", desc: "Create sessions, assign coaches, manage capacity" },
   { label: "Payments Queue", href: "#", desc: "Verify pending payments, waive fees" },
-  { label: "Members & Coaches", href: "#", desc: "View directory, NTRP-style ratings, growth history" },
+  { label: "Members & Coaches", href: "#", desc: "View directory, club NTRP-style ratings, growth history" },
   { label: "Book on Behalf", href: "#", desc: "Book a court for a member or coach" },
 ] as const;
 
