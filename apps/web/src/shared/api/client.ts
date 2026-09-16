@@ -42,15 +42,29 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   return body as T;
 }
 
-/** True when GET /courts is a real courts route (auth errors still count as live). */
-export async function courtsRouteExists(): Promise<boolean> {
+/** Probe result for GET /courts — never treat 5xx as "use mock". */
+export type CourtsProbe = "live" | "missing" | "error";
+
+export async function probeCourtsRoute(): Promise<CourtsProbe> {
   try {
-    const res = await fetch(`${BASE}/courts`, { credentials: "include", headers: { Accept: "application/json" } });
-    // 2xx / 401 / 403 → courts router is present. 404 or proxy/5xx → use mock.
-    return res.ok || res.status === 401 || res.status === 403;
+    const res = await fetch(`${BASE}/courts`, {
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+    // 2xx / 401 / 403 → courts router is present.
+    if (res.ok || res.status === 401 || res.status === 403) return "live";
+    // 404 → route not mounted yet.
+    if (res.status === 404) return "missing";
+    // 5xx / other → fail closed (caller must not sticky-mock).
+    return "error";
   } catch {
-    return false;
+    return "error";
   }
+}
+
+/** @deprecated use probeCourtsRoute */
+export async function courtsRouteExists(): Promise<boolean> {
+  return (await probeCourtsRoute()) === "live";
 }
 
 function safeJson(text: string): unknown {
