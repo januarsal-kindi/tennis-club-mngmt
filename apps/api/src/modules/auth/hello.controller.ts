@@ -11,16 +11,12 @@ import { Role } from '@prisma/client';
 import { SESSION_COOKIE } from './auth.constants';
 import { Roles } from './guards/roles.decorator';
 import { RolesGuard } from './guards/roles.guard';
-import {
-  SessionAuthGuard,
-  type AuthenticatedRequest,
-} from './guards/session-auth.guard';
+import { type AuthenticatedRequest } from './guards/session-auth.guard';
 
 @ApiTags('hello')
 @ApiCookieAuth(SESSION_COOKIE)
 @ApiUnauthorizedResponse({ description: 'Missing, invalid, or expired session' })
 @Controller()
-@UseGuards(SessionAuthGuard)
 export class HelloController {
   @Get('hello')
   @ApiOperation({ summary: 'Role-gated hello (any authenticated role)' })

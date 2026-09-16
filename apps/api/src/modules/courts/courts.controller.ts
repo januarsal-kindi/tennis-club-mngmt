@@ -27,10 +27,7 @@ import { Role } from '@prisma/client';
 import { SESSION_COOKIE } from '../auth/auth.constants';
 import { Roles } from '../auth/guards/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import {
-  AuthenticatedRequest,
-  SessionAuthGuard,
-} from '../auth/guards/session-auth.guard';
+import { AuthenticatedRequest } from '../auth/guards/session-auth.guard';
 import { CourtsService } from './courts.service';
 import {
   BlackoutDto,
@@ -46,7 +43,6 @@ import {
 @ApiCookieAuth(SESSION_COOKIE)
 @ApiUnauthorizedResponse({ description: 'Missing, invalid, or expired session' })
 @Controller('courts')
-@UseGuards(SessionAuthGuard)
 export class CourtsController {
   constructor(private readonly courts: CourtsService) {}
 

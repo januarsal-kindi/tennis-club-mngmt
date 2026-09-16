@@ -11,7 +11,6 @@ import { Role } from '@prisma/client';
 import { SESSION_COOKIE } from '../auth/auth.constants';
 import { Roles } from '../auth/guards/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { ClubSettingsService } from './club-settings.service';
 import { ClubSettingsDto, UpdateClubSettingsDto } from './dto/club-settings.dto';
 
@@ -19,7 +18,6 @@ import { ClubSettingsDto, UpdateClubSettingsDto } from './dto/club-settings.dto'
 @ApiCookieAuth(SESSION_COOKIE)
 @ApiUnauthorizedResponse({ description: 'Missing, invalid, or expired session' })
 @Controller('club-settings')
-@UseGuards(SessionAuthGuard)
 export class ClubSettingsController {
   constructor(private readonly clubSettings: ClubSettingsService) {}
 

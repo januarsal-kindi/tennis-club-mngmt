@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AuthCookiesService } from './auth-cookies.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -9,7 +10,12 @@ import { SessionAuthGuard } from './guards/session-auth.guard';
 
 @Module({
   controllers: [AuthController, MeController, HelloController],
-  providers: [AuthService, AuthCookiesService, SessionAuthGuard, RolesGuard],
-  exports: [AuthService, AuthCookiesService, SessionAuthGuard, RolesGuard],
+  providers: [
+    AuthService,
+    AuthCookiesService,
+    RolesGuard,
+    { provide: APP_GUARD, useClass: SessionAuthGuard },
+  ],
+  exports: [AuthService, AuthCookiesService, RolesGuard],
 })
 export class AuthModule {}
