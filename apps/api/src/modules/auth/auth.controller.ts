@@ -21,9 +21,11 @@ import { AuthCookiesService } from './auth-cookies.service';
 import { AuthService, type PublicUser } from './auth.service';
 import { PublicUserDto } from './dto/public-user.dto';
 import { LoginDto, RegisterDto } from './dto/register.dto';
+import { Public } from './guards/public.decorator';
 
 @ApiTags('auth')
 @Controller('auth')
+@Public()
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
