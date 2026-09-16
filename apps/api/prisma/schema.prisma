@@ -1,0 +1,21 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Single-row settings table. Seeded once at bootstrap.
+model ClubSettings {
+  id        Int      @id @default(1)
+  name      String
+  /// IANA timezone identifier, e.g. "America/New_York" (ARCH-A1)
+  timezone  String
+  weekStart Int      @default(1) // 1=Monday, 0=Sunday
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("club_settings")
+}

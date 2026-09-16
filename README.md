@@ -13,5 +13,59 @@ Phase 1 single-club product: admin + customer portals, one backend.
 - BE: `.cursor/rules/architecture.mdc`
 - After every task: run the project linter before done/PR
 
-## Intended layout
-Monorepo: `apps/web` (Next.js dual portals) + `apps/api` (NestJS) + PostgreSQL.
+## Monorepo layout
+
+```
+apps/api/     — NestJS REST API (BE-1+)
+apps/web/     — Next.js dual portals (FE-1+, not yet)
+packages/shared/ — Shared Zod schemas/types
+```
+
+## Running the API (BE-1)
+
+### Prerequisites
+- Node ≥ 20, pnpm ≥ 9
+- PostgreSQL 16 running locally (or Docker)
+
+### Setup
+
+```bash
+# Install dependencies
+pnpm install
+
+# Copy env and fill in DATABASE_URL
+cp apps/api/.env.example apps/api/.env
+
+# Generate Prisma client
+pnpm --filter @tennis-club/api db:generate
+
+# Run migrations (creates the DB schema)
+pnpm --filter @tennis-club/api db:migrate
+
+# Start the API in dev mode (watch)
+pnpm --filter @tennis-club/api dev
+```
+
+The API starts at http://localhost:3001.
+
+- Health check: `GET http://localhost:3001/api/v1/health`
+- OpenAPI docs: http://localhost:3001/api/docs
+
+### Lint
+
+```bash
+pnpm lint
+```
+
+### Database helpers
+
+```bash
+# Create a new migration after schema changes
+pnpm --filter @tennis-club/api db:migrate
+
+# Deploy migrations in CI/production
+pnpm --filter @tennis-club/api db:migrate:deploy
+
+# Regenerate Prisma client after schema changes
+pnpm --filter @tennis-club/api db:generate
+```
