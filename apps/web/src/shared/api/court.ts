@@ -1,4 +1,5 @@
-import { apiFetch, courtsRouteExists } from "./client";
+import { allowOfflineAuth } from "@/shared/auth";
+import { ApiError, apiFetch, probeCourtsRoute } from "./client";
 
 /** 0 = Sunday … 6 = Saturday (matches JS `Date.getDay` / Prisma `weekStart`). */
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -14,13 +15,14 @@ export type Blackout = {
   courtId: string;
   start: string;
   end: string;
-  reason?: string;
+  reason?: string | null;
 };
 
 export type Court = {
   id: string;
   name: string;
   active: boolean;
+  warning?: string;
 };
 
 export const WEEKDAY_ORDER: Weekday[] = [1, 2, 3, 4, 5, 6, 0];
@@ -50,11 +52,45 @@ export function courtsApiSource(): CourtsSource | null {
   return source;
 }
 
+/**
+ * Resolve live vs mock once.
+ * - live sticks: never silent-fallback to localStorage after /courts exists
+ * - mock only when route missing AND offline/demo auth gate allows it
+ * - 5xx / network → throw (fail closed)
+ */
 export async function resolveCourtsApiSource(): Promise<CourtsSource> {
-  if (source) return source;
-  // TODO(BE-3): drop mock once GET /api/v1/courts is on main / contract published.
-  source = (await courtsRouteExists()) ? "live" : "mock";
-  return source;
+  if (source === "live") return "live";
+  if (source === "mock") return "mock";
+
+  const probe = await probeCourtsRoute();
+  if (probe === "live") {
+    source = "live";
+    return "live";
+  }
+  if (probe === "missing" && allowOfflineAuth()) {
+    source = "mock";
+    return "mock";
+  }
+  if (probe === "missing") {
+    throw new Error("Courts API is not available (mock disabled outside local demo).");
+  }
+  throw new Error("Courts API unavailable (fail closed on 5xx/network).");
+}
+
+/** Safari `<input type="time">` may yield `HH:mm:ss` — contract wants `HH:mm`. */
+export function toHHmm(value: string): string {
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?/.exec(value.trim());
+  if (!m) return value.trim();
+  const hh = m[1].padStart(2, "0");
+  return `${hh}:${m[2]}`;
+}
+
+export function normalizeWeeklyHours(hours: WeeklyHour[]): WeeklyHour[] {
+  return hours.map((h) => ({
+    ...h,
+    startLocal: toHHmm(h.startLocal),
+    endLocal: toHHmm(h.endLocal),
+  }));
 }
 
 export async function listCourts(): Promise<Court[]> {
@@ -96,41 +132,34 @@ export async function updateCourt(id: string, input: { name?: string; active?: b
 
 export async function getWeeklyHours(courtId: string): Promise<WeeklyHour[]> {
   if ((await resolveCourtsApiSource()) === "live") {
-    try {
-      return asList<WeeklyHour>(await apiFetch<unknown>(`/courts/${courtId}/weekly-hours`), "hours");
-    } catch (err) {
-      if (isNotFound(err)) return [];
-      throw err;
-    }
+    // 404 = missing court (NOT empty hours). Empty hours are 200 `{ hours: [] }`.
+    return asList<WeeklyHour>(await apiFetch<unknown>(`/courts/${courtId}/weekly-hours`), "hours");
   }
   return readMock().hours[courtId] ?? [];
 }
 
 export async function putWeeklyHours(courtId: string, hours: WeeklyHour[]): Promise<WeeklyHour[]> {
+  const normalized = normalizeWeeklyHours(hours);
   if ((await resolveCourtsApiSource()) === "live") {
-    // Architecture: PUT /courts/:id/weekly-hours — body is the full week replacement.
+    // Architecture: PUT /courts/:id/weekly-hours — body is the full week replacement (raw array OK).
     return asList<WeeklyHour>(
       await apiFetch<unknown>(`/courts/${courtId}/weekly-hours`, {
         method: "PUT",
-        body: JSON.stringify(hours),
+        body: JSON.stringify(normalized),
       }),
       "hours",
     );
   }
   const db = readMock();
-  db.hours[courtId] = hours;
+  db.hours[courtId] = normalized;
   writeMock(db);
-  return hours;
+  return normalized;
 }
 
 export async function listBlackouts(courtId: string): Promise<Blackout[]> {
   if ((await resolveCourtsApiSource()) === "live") {
-    try {
-      return asList<Blackout>(await apiFetch<unknown>(`/courts/${courtId}/blackouts`), "blackouts");
-    } catch (err) {
-      if (isNotFound(err)) return [];
-      throw err;
-    }
+    // 404 = missing court; empty list is 200.
+    return asList<Blackout>(await apiFetch<unknown>(`/courts/${courtId}/blackouts`), "blackouts");
   }
   return readMock().blackouts[courtId] ?? [];
 }
@@ -177,13 +206,22 @@ export async function courtMayHaveFutureHolds(courtId: string): Promise<boolean>
   return true;
 }
 
+function addOneCalendarDay(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + 1);
+  return dt.toISOString().slice(0, 10);
+}
+
+/**
+ * Half-open all-day blackout bounds as ISO-8601 at UTC midnight of calendar dates.
+ * Uses Date.UTC only (no browser local TZ). Prefer club-TZ conversion via club-settings when wired.
+ */
 export function allDayRange(startDate: string, endDateInclusive: string): { start: string; end: string } {
-  const end = new Date(`${endDateInclusive}T00:00:00`);
-  end.setDate(end.getDate() + 1);
-  const y = end.getFullYear();
-  const m = String(end.getMonth() + 1).padStart(2, "0");
-  const d = String(end.getDate()).padStart(2, "0");
-  return { start: `${startDate}T00:00:00`, end: `${y}-${m}-${d}T00:00:00` };
+  return {
+    start: `${startDate}T00:00:00.000Z`,
+    end: `${addOneCalendarDay(endDateInclusive)}T00:00:00.000Z`,
+  };
 }
 
 export function blackoutDateLabel(iso: string): string {
@@ -195,9 +233,11 @@ export function blackoutInclusiveEnd(start: string, end: string): string {
   const startDay = start.slice(0, 10);
   const time = end.slice(11, 19);
   if (time === "00:00:00" || time === "") {
-    const d = new Date(`${end.slice(0, 10)}T00:00:00`);
-    d.setDate(d.getDate() - 1);
-    const label = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const endDay = end.slice(0, 10);
+    const [y, m, d] = endDay.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() - 1);
+    const label = dt.toISOString().slice(0, 10);
     return label < startDay ? startDay : label;
   }
   return end.slice(0, 10);
@@ -210,10 +250,6 @@ function asList<T>(data: unknown, key: string): T[] {
     if (Array.isArray(nested)) return nested as T[];
   }
   return [];
-}
-
-function isNotFound(err: unknown): boolean {
-  return typeof err === "object" && err !== null && "status" in err && (err as { status: number }).status === 404;
 }
 
 function emptyDb(): MockDb {
@@ -234,3 +270,6 @@ function writeMock(db: MockDb) {
   if (typeof window === "undefined") return;
   localStorage.setItem(MOCK_KEY, JSON.stringify(db));
 }
+
+// Re-export ApiError for callers that catch probe failures.
+export { ApiError };
