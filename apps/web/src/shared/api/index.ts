@@ -1,4 +1,5 @@
 export { ApiError } from "./client";
+export { getMe, login, logout, type PublicUser } from "./auth";
 export {
   allDayRange,
   blackoutDateLabel,
