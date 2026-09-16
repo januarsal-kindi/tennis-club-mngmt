@@ -1,14 +1,18 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { envSchema } from './config/env.validation';
-import { PrismaModule } from './prisma/prisma.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { ClubSettingsModule } from './modules/club-settings/club-settings.module';
 import { HealthModule } from './modules/health/health.module';
+import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
     PrismaModule,
     HealthModule,
+    AuthModule,
+    ClubSettingsModule,
   ],
 })
 export class AppModule {}
