@@ -8,6 +8,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <nav className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-4">
           <span className="font-bold text-white mr-4">🎾 Tennis Club — Admin</span>
           <NavLink href={ROUTES.admin.dashboard}>Dashboard</NavLink>
+          <NavLink href={ROUTES.admin.courts}>Courts</NavLink>
         </nav>
       </header>
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-8">{children}</main>
