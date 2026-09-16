@@ -7,7 +7,7 @@
     "lint:web": "pnpm --filter web lint",
     "dev:api": "pnpm --filter @tennis-club/api dev",
     "lint:api": "pnpm --filter @tennis-club/api lint",
-    "lint": "pnpm --filter @tennis-club/api lint"
+    "lint": "pnpm --filter @tennis-club/api lint && pnpm --filter web lint"
   },
   "engines": {
     "node": ">=20",
