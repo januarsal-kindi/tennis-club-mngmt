@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ApiError, login } from "@/shared/api";
 import {
   ROLE_HINT_COOKIE,
+  allowOfflineAuth,
   isRole,
   portalForRole,
   setRoleHintCookie,
@@ -13,11 +14,12 @@ import type { Role } from "@/shared/config";
 
 /**
  * Prefer BE-2 `POST /api/v1/auth/login` (HttpOnly `tc_session`).
- * If the API is unreachable, allow a documented offline role hint so portal
- * shells (and FE-2 courts mock) remain usable without a backend.
+ * Offline role hint (`tc_role`) is gated: NODE_ENV !== production or
+ * NEXT_PUBLIC_ALLOW_OFFLINE_AUTH=true. Never treat 401/403 as offline success.
  */
 export default function LoginPage() {
   const router = useRouter();
+  const offlineOk = allowOfflineAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [offlineRole, setOfflineRole] = useState<Role>("admin");
@@ -33,16 +35,26 @@ export default function LoginPage() {
       router.replace(portalForRole(user.role));
       router.refresh();
     } catch (err) {
+      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        setError(err.message || "Invalid email or password");
+        return;
+      }
+
       const network =
         err instanceof TypeError ||
         (err instanceof ApiError && (err.status >= 500 || err.status === 404)) ||
         (err instanceof Error && /failed to fetch|network|load failed/i.test(err.message));
 
-      if (network) {
-        // Offline fallback: set `tc_role` only — no `tc_session`.
+      if (network && offlineOk) {
+        // Local-demo only: set `tc_role` hint — no `tc_session`.
         setRoleHintCookie(offlineRole);
         router.replace(portalForRole(offlineRole));
         router.refresh();
+        return;
+      }
+
+      if (network) {
+        setError("Sign-in service unavailable. Try again when the API is up.");
         return;
       }
 
@@ -91,28 +103,30 @@ export default function LoginPage() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
           </div>
-          <div className="space-y-1">
-            <label className="block text-sm font-medium text-gray-700" htmlFor="offlineRole">
-              Offline role (API down only)
-            </label>
-            <select
-              id="offlineRole"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              value={offlineRole}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (isRole(v)) setOfflineRole(v);
-              }}
-            >
-              <option value="admin">admin</option>
-              <option value="member">member</option>
-              <option value="coach">coach</option>
-            </select>
-            <p className="text-xs text-gray-400">
-              Used only when the API is unreachable; sets `{ROLE_HINT_COOKIE}` stub. Prefer real
-              login when BE-2 is running.
-            </p>
-          </div>
+          {offlineOk && (
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700" htmlFor="offlineRole">
+                Offline role (API down only)
+              </label>
+              <select
+                id="offlineRole"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                value={offlineRole}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (isRole(v)) setOfflineRole(v);
+                }}
+              >
+                <option value="admin">admin</option>
+                <option value="member">member</option>
+                <option value="coach">coach</option>
+              </select>
+              <p className="text-xs text-gray-400">
+                Local demo only (`{ROLE_HINT_COOKIE}`). Disabled in production unless
+                NEXT_PUBLIC_ALLOW_OFFLINE_AUTH=true. Never used on 401/403.
+              </p>
+            </div>
+          )}
           {error && (
             <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
           )}

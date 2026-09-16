@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   ROLE_HINT_COOKIE,
   SESSION_COOKIE,
+  allowOfflineAuth,
   isRole,
   portalForRole,
 } from "@/shared/auth";
@@ -28,11 +29,12 @@ async function resolveRole(req: NextRequest): Promise<Role | null> {
         }
       }
     } catch {
-      // API unreachable — fall through to role hint.
+      // API unreachable — fall through to gated role hint.
     }
   }
 
-  // Offline / API-down fallback (documented): FE-1 `tc_role` hint only.
+  // Offline / API-down fallback — only when offline auth is explicitly allowed.
+  if (!allowOfflineAuth()) return null;
   const hint = req.cookies.get(ROLE_HINT_COOKIE)?.value;
   return isRole(hint) ? hint : null;
 }

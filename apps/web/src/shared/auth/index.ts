@@ -16,6 +16,15 @@ export function isRole(value: unknown): value is Role {
   return typeof value === "string" && (ROLES as string[]).includes(value);
 }
 
+/**
+ * Offline `tc_role` / role-picker fail-open is local-demo only.
+ * Enabled when NODE_ENV !== "production", or NEXT_PUBLIC_ALLOW_OFFLINE_AUTH=true.
+ */
+export function allowOfflineAuth(): boolean {
+  if (process.env.NEXT_PUBLIC_ALLOW_OFFLINE_AUTH === "true") return true;
+  return process.env.NODE_ENV !== "production";
+}
+
 export function portalForRole(role: Role): "/admin/dashboard" | "/customer/dashboard" {
   return role === "admin" ? "/admin/dashboard" : "/customer/dashboard";
 }
