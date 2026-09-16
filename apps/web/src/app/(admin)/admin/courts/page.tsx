@@ -249,8 +249,8 @@ export default function AdminCourtsPage() {
 
       {source === "mock" && (
         <p className="text-sm rounded-lg border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3">
-          Using local mock data — BE-3 courts API is not available yet. Changes stay in this browser
-          until <code className="text-xs">GET /api/v1/courts</code> is live.
+          Using local mock data — <code className="text-xs">GET /api/v1/courts</code> is unreachable.
+          Changes stay in this browser until the courts API responds with 2xx/401/403.
         </p>
       )}
 
