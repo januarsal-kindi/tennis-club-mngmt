@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { envSchema } from './config/env.validation';
 import { AuthModule } from './modules/auth/auth.module';
 import { ClubSettingsModule } from './modules/club-settings/club-settings.module';
+import { CourtsModule } from './modules/courts/courts.module';
 import { HealthModule } from './modules/health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -13,6 +14,7 @@ import { PrismaModule } from './prisma/prisma.module';
     HealthModule,
     AuthModule,
     ClubSettingsModule,
+    CourtsModule,
   ],
 })
 export class AppModule {}
