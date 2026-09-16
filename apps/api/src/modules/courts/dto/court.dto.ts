@@ -13,7 +13,7 @@ import {
   ValidateIf,
 } from 'class-validator';
 
-const HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const HH_MM = /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
 
 export class CourtDto {
   @ApiProperty({ format: 'uuid' })
@@ -81,11 +81,13 @@ export class WeeklyHourDto {
   weekday!: number;
 
   @ApiProperty({ example: '08:00' })
+  @Transform(({ value }) => normalizeHour(value))
   @IsString()
   @Matches(HH_MM, { message: 'startLocal must be HH:mm' })
   startLocal!: string;
 
   @ApiProperty({ example: '21:00' })
+  @Transform(({ value }) => normalizeHour(value))
   @IsString()
   @Matches(HH_MM, { message: 'endLocal must be HH:mm' })
   endLocal!: string;
@@ -127,3 +129,11 @@ export class BlackoutDto {
 }
 
 export { HH_MM };
+
+function normalizeHour(value: unknown): unknown {
+  if (typeof value !== 'string') {
+    return value;
+  }
+  const match = /^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/.exec(value.trim());
+  return match ? `${match[1]}:${match[2]}` : value.trim();
+}

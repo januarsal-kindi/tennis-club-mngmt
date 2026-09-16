@@ -9,7 +9,6 @@ import {
   CreateBlackoutDto,
   CreateCourtDto,
   CourtDto,
-  HH_MM,
   UpdateCourtDto,
   WeeklyHourDto,
 } from './dto/court.dto';
@@ -25,12 +24,13 @@ export class CourtsService {
     role: Role,
     activeQuery?: 'true' | 'false',
   ): Promise<{ courts: Court[] }> {
+    // Non-admins always see active courts only (ignore ?active=).
     const where =
-      activeQuery !== undefined
-        ? { active: activeQuery === 'true' }
-        : role === Role.admin
-          ? undefined
-          : { active: true };
+      role === Role.admin
+        ? activeQuery !== undefined
+          ? { active: activeQuery === 'true' }
+          : undefined
+        : { active: true };
 
     const courts = await this.prisma.court.findMany({
       where,
@@ -187,8 +187,8 @@ function parseWeeklyHoursBody(body: unknown): WeeklyHourDto[] {
     }
     const entry = item as Record<string, unknown>;
     const weekday = Number(entry.weekday);
-    const startLocal = entry.startLocal;
-    const endLocal = entry.endLocal;
+    const startLocal = normalizeLocalTime(entry.startLocal);
+    const endLocal = normalizeLocalTime(entry.endLocal);
 
     if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
       throw new BadRequestException('weekday must be an integer 0-6');
@@ -196,10 +196,10 @@ function parseWeeklyHoursBody(body: unknown): WeeklyHourDto[] {
     if (weekdays.has(weekday)) {
       throw new BadRequestException(`Duplicate weekday ${weekday}`);
     }
-    if (typeof startLocal !== 'string' || !HH_MM.test(startLocal)) {
+    if (!startLocal) {
       throw new BadRequestException('startLocal must be HH:mm');
     }
-    if (typeof endLocal !== 'string' || !HH_MM.test(endLocal)) {
+    if (!endLocal) {
       throw new BadRequestException('endLocal must be HH:mm');
     }
     if (!(startLocal < endLocal)) {
@@ -213,4 +213,16 @@ function parseWeeklyHoursBody(body: unknown): WeeklyHourDto[] {
   }
 
   return hours;
+}
+
+function normalizeLocalTime(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  const withSeconds = /^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/.exec(trimmed);
+  if (!withSeconds) {
+    return null;
+  }
+  return `${withSeconds[1]}:${withSeconds[2]}`;
 }
