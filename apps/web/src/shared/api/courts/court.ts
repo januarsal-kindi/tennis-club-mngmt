@@ -1,5 +1,5 @@
 import { allowOfflineAuth } from "@/shared/auth";
-import { ApiError, apiFetch, probeCourtsRoute } from "./client";
+import { ApiError, http, probeCourtsRoute } from "../client";
 
 /** 0 = Sunday … 6 = Saturday (matches JS `Date.getDay` / Prisma `weekStart`). */
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -95,7 +95,8 @@ export function normalizeWeeklyHours(hours: WeeklyHour[]): WeeklyHour[] {
 
 export async function listCourts(): Promise<Court[]> {
   if ((await resolveCourtsApiSource()) === "live") {
-    return asList<Court>(await apiFetch<unknown>("/courts"), "courts");
+    const { data } = await http.get<unknown>("/courts");
+    return asList<Court>(data, "courts");
   }
   return readMock().courts;
 }
@@ -103,10 +104,8 @@ export async function listCourts(): Promise<Court[]> {
 export async function createCourt(input: { name: string; active?: boolean }): Promise<Court> {
   const name = input.name.trim();
   if ((await resolveCourtsApiSource()) === "live") {
-    return apiFetch<Court>("/courts", {
-      method: "POST",
-      body: JSON.stringify({ name, active: input.active ?? true }),
-    });
+    const { data } = await http.post<Court>("/courts", { name, active: input.active ?? true });
+    return data;
   }
   const db = readMock();
   const court: Court = { id: crypto.randomUUID(), name, active: input.active ?? true };
@@ -119,7 +118,8 @@ export async function createCourt(input: { name: string; active?: boolean }): Pr
 
 export async function updateCourt(id: string, input: { name?: string; active?: boolean }): Promise<Court> {
   if ((await resolveCourtsApiSource()) === "live") {
-    return apiFetch<Court>(`/courts/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+    const { data } = await http.patch<Court>(`/courts/${id}`, input);
+    return data;
   }
   const db = readMock();
   const court = db.courts.find((c) => c.id === id);
@@ -133,7 +133,8 @@ export async function updateCourt(id: string, input: { name?: string; active?: b
 export async function getWeeklyHours(courtId: string): Promise<WeeklyHour[]> {
   if ((await resolveCourtsApiSource()) === "live") {
     // 404 = missing court (NOT empty hours). Empty hours are 200 `{ hours: [] }`.
-    return asList<WeeklyHour>(await apiFetch<unknown>(`/courts/${courtId}/weekly-hours`), "hours");
+    const { data } = await http.get<unknown>(`/courts/${courtId}/weekly-hours`);
+    return asList<WeeklyHour>(data, "hours");
   }
   return readMock().hours[courtId] ?? [];
 }
@@ -142,13 +143,8 @@ export async function putWeeklyHours(courtId: string, hours: WeeklyHour[]): Prom
   const normalized = normalizeWeeklyHours(hours);
   if ((await resolveCourtsApiSource()) === "live") {
     // Architecture: PUT /courts/:id/weekly-hours — body is the full week replacement (raw array OK).
-    return asList<WeeklyHour>(
-      await apiFetch<unknown>(`/courts/${courtId}/weekly-hours`, {
-        method: "PUT",
-        body: JSON.stringify(normalized),
-      }),
-      "hours",
-    );
+    const { data } = await http.put<unknown>(`/courts/${courtId}/weekly-hours`, normalized);
+    return asList<WeeklyHour>(data, "hours");
   }
   const db = readMock();
   db.hours[courtId] = normalized;
@@ -159,7 +155,8 @@ export async function putWeeklyHours(courtId: string, hours: WeeklyHour[]): Prom
 export async function listBlackouts(courtId: string): Promise<Blackout[]> {
   if ((await resolveCourtsApiSource()) === "live") {
     // 404 = missing court; empty list is 200.
-    return asList<Blackout>(await apiFetch<unknown>(`/courts/${courtId}/blackouts`), "blackouts");
+    const { data } = await http.get<unknown>(`/courts/${courtId}/blackouts`);
+    return asList<Blackout>(data, "blackouts");
   }
   return readMock().blackouts[courtId] ?? [];
 }
@@ -169,10 +166,8 @@ export async function createBlackout(
   input: { start: string; end: string; reason?: string },
 ): Promise<Blackout> {
   if ((await resolveCourtsApiSource()) === "live") {
-    return apiFetch<Blackout>(`/courts/${courtId}/blackouts`, {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
+    const { data } = await http.post<Blackout>(`/courts/${courtId}/blackouts`, input);
+    return data;
   }
   const db = readMock();
   const blackout: Blackout = {
@@ -189,7 +184,7 @@ export async function createBlackout(
 
 export async function deleteBlackout(courtId: string, blackoutId: string): Promise<void> {
   if ((await resolveCourtsApiSource()) === "live") {
-    await apiFetch<void>(`/courts/${courtId}/blackouts/${blackoutId}`, { method: "DELETE" });
+    await http.delete(`/courts/${courtId}/blackouts/${blackoutId}`);
     return;
   }
   const db = readMock();

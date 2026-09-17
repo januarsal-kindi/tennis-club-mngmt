@@ -1,25 +1,24 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { Controller, useForm, type Path } from "react-hook-form";
 import {
   allDayRange,
   blackoutDateLabel,
   blackoutInclusiveEnd,
   courtMayHaveFutureHolds,
-  createBlackout,
-  createCourt,
-  deleteBlackout,
-  getWeeklyHours,
-  listBlackouts,
-  listCourts,
-  putWeeklyHours,
-  resolveCourtsApiSource,
-  updateCourt,
+  courtsApiSource,
+  useBlackoutsQuery,
+  useCourtsQuery,
+  useCreateBlackoutMutation,
+  useCreateCourtMutation,
+  useDeleteBlackoutMutation,
+  usePutWeeklyHoursMutation,
+  useUpdateCourtMutation,
+  useWeeklyHoursQuery,
   WEEKDAY_LABEL,
   WEEKDAY_ORDER,
-  type Blackout,
   type Court,
-  type CourtsSource,
   type Weekday,
   type WeeklyHour,
 } from "@/shared/api";
@@ -61,99 +60,98 @@ function draftToHours(draft: HourDraft): WeeklyHour[] {
   }));
 }
 
+function errMessage(err: unknown, fallback: string) {
+  return err instanceof Error ? err.message : fallback;
+}
+
 export default function AdminCourtsPage() {
-  const [source, setSource] = useState<CourtsSource | null>(null);
-  const [courts, setCourts] = useState<Court[]>([]);
+  const courtsQuery = useCourtsQuery();
+  const createCourt = useCreateCourtMutation();
+  const updateCourt = useUpdateCourtMutation();
+  const putHours = usePutWeeklyHoursMutation();
+  const addBlackout = useCreateBlackoutMutation();
+  const removeBlackout = useDeleteBlackoutMutation();
+
+  const courts = courtsQuery.data ?? [];
+  const source = courtsQuery.isSuccess ? courtsApiSource() : null;
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [hours, setHours] = useState<HourDraft>(emptyHours());
-  const [blackouts, setBlackouts] = useState<Blackout[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [editName, setEditName] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
   const [pendingDeactivateId, setPendingDeactivateId] = useState<string | null>(null);
-  const [boStart, setBoStart] = useState("");
-  const [boEnd, setBoEnd] = useState("");
-  const [boReason, setBoReason] = useState("");
 
+  const hoursQuery = useWeeklyHoursQuery(selectedId);
+  const blackoutsQuery = useBlackoutsQuery(selectedId);
+
+  const createForm = useForm<{ name: string }>({ defaultValues: { name: "" } });
+  const renameForm = useForm<{ name: string }>({ defaultValues: { name: "" } });
+  const { reset: resetRename } = renameForm;
+  const hoursForm = useForm<HourDraft>({ defaultValues: emptyHours() });
+  const { reset: resetHours } = hoursForm;
+  const blackoutForm = useForm<{ start: string; end: string; reason: string }>({
+    defaultValues: { start: "", end: "", reason: "" },
+  });
+
+  const hours = hoursForm.watch();
   const selected = courts.find((c) => c.id === selectedId) ?? null;
-  const hoursConfigured = WEEKDAY_ORDER.some((d) => hours[d].open);
-
-  const loadCourts = useCallback(async (preferId?: string | null) => {
-    setLoadError(null);
-    try {
-      const src = await resolveCourtsApiSource();
-      setSource(src);
-      const list = await listCourts();
-      setCourts(list);
-      setSelectedId((current) => {
-        const next = preferId ?? current;
-        if (next && list.some((c) => c.id === next)) return next;
-        return list[0]?.id ?? null;
-      });
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Failed to load courts");
-    }
-  }, []);
+  const blackouts = blackoutsQuery.data ?? [];
+  const hoursConfigured = WEEKDAY_ORDER.some((d) => hours[d]?.open);
 
   useEffect(() => {
-    void loadCourts();
-  }, [loadCourts]);
+    const list = courtsQuery.data;
+    if (!list) return;
+    if (!list.length) {
+      setSelectedId(null);
+      return;
+    }
+    setSelectedId((current) => {
+      if (current && list.some((c) => c.id === current)) return current;
+      if (current) return current;
+      return list[0]?.id ?? null;
+    });
+  }, [courtsQuery.data]);
+
+  useEffect(() => {
+    resetRename({ name: selected?.name ?? "" });
+  }, [selected?.id, selected?.name, resetRename]);
 
   useEffect(() => {
     if (!selectedId) {
-      setHours(emptyHours());
-      setBlackouts([]);
-      setEditName("");
+      resetHours(emptyHours());
       return;
     }
-    let cancelled = false;
-    (async () => {
-      try {
-        const [h, b] = await Promise.all([getWeeklyHours(selectedId), listBlackouts(selectedId)]);
-        if (cancelled) return;
-        setHours(hoursToDraft(h));
-        setBlackouts(b);
-      } catch (err) {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : "Failed to load schedule");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedId]);
+    if (hoursQuery.data) resetHours(hoursToDraft(hoursQuery.data));
+  }, [selectedId, hoursQuery.data, resetHours]);
 
-  useEffect(() => {
-    const court = courts.find((c) => c.id === selectedId);
-    if (court) setEditName(court.name);
-  }, [selectedId, courts]);
+  const queryError = courtsQuery.error ?? hoursQuery.error ?? blackoutsQuery.error;
+  const loadError =
+    actionError ?? (queryError ? errMessage(queryError, "Failed to load courts") : null);
 
-  async function onCreate(e: FormEvent) {
-    e.preventDefault();
-    if (!newName.trim()) return;
-    setBusy(true);
-    setLoadError(null);
+  const busy =
+    createCourt.isPending ||
+    updateCourt.isPending ||
+    putHours.isPending ||
+    addBlackout.isPending ||
+    removeBlackout.isPending;
+
+  async function onCreate({ name }: { name: string }) {
+    if (!name.trim()) return;
+    setActionError(null);
     try {
-      const court = await createCourt({ name: newName });
-      setNewName("");
-      await loadCourts(court.id);
+      const court = await createCourt.mutateAsync({ name });
+      createForm.reset({ name: "" });
+      setSelectedId(court.id);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Could not create court");
-    } finally {
-      setBusy(false);
+      setActionError(errMessage(err, "Could not create court"));
     }
   }
 
-  async function onSaveName() {
-    if (!selected || !editName.trim()) return;
-    setBusy(true);
+  async function onSaveName({ name }: { name: string }) {
+    if (!selected || !name.trim()) return;
+    setActionError(null);
     try {
-      await updateCourt(selected.id, { name: editName });
-      await loadCourts(selected.id);
+      await updateCourt.mutateAsync({ id: selected.id, input: { name } });
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Could not rename court");
-    } finally {
-      setBusy(false);
+      setActionError(errMessage(err, "Could not rename court"));
     }
   }
 
@@ -166,75 +164,57 @@ export default function AdminCourtsPage() {
   }
 
   async function applyActive(court: Court, active: boolean) {
-    setBusy(true);
     setPendingDeactivateId(null);
+    setActionError(null);
     try {
-      await updateCourt(court.id, { active });
-      await loadCourts(court.id);
+      await updateCourt.mutateAsync({ id: court.id, input: { active } });
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Could not update court");
-    } finally {
-      setBusy(false);
+      setActionError(errMessage(err, "Could not update court"));
     }
   }
 
-  async function onSaveHours() {
+  async function onSaveHours(draft: HourDraft) {
     if (!selected) return;
-    const next = draftToHours(hours);
+    const next = draftToHours(draft);
     if (next.some((h) => h.startLocal >= h.endLocal)) {
-      setLoadError("Open hours need a start time before the end time.");
+      setActionError("Open hours need a start time before the end time.");
       return;
     }
-    setBusy(true);
-    setLoadError(null);
+    setActionError(null);
     try {
-      await putWeeklyHours(selected.id, next);
-      setHours(hoursToDraft(await getWeeklyHours(selected.id)));
+      await putHours.mutateAsync({ courtId: selected.id, hours: next });
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Could not save hours");
-    } finally {
-      setBusy(false);
+      setActionError(errMessage(err, "Could not save hours"));
     }
   }
 
-  async function onAddBlackout(e: FormEvent) {
-    e.preventDefault();
-    if (!selected || !boStart) return;
-    const endDate = boEnd || boStart;
-    if (endDate < boStart) {
-      setLoadError("Blackout end date must be on or after the start date.");
+  async function onAddBlackout({ start, end, reason }: { start: string; end: string; reason: string }) {
+    if (!selected || !start) return;
+    const endDate = end || start;
+    if (endDate < start) {
+      setActionError("Blackout end date must be on or after the start date.");
       return;
     }
-    setBusy(true);
-    setLoadError(null);
+    setActionError(null);
     try {
-      const range = allDayRange(boStart, endDate);
-      await createBlackout(selected.id, {
-        start: range.start,
-        end: range.end,
-        reason: boReason.trim() || undefined,
+      const range = allDayRange(start, endDate);
+      await addBlackout.mutateAsync({
+        courtId: selected.id,
+        input: { start: range.start, end: range.end, reason: reason.trim() || undefined },
       });
-      setBoStart("");
-      setBoEnd("");
-      setBoReason("");
-      setBlackouts(await listBlackouts(selected.id));
+      blackoutForm.reset({ start: "", end: "", reason: "" });
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Could not add blackout");
-    } finally {
-      setBusy(false);
+      setActionError(errMessage(err, "Could not add blackout"));
     }
   }
 
   async function onDeleteBlackout(id: string) {
     if (!selected) return;
-    setBusy(true);
+    setActionError(null);
     try {
-      await deleteBlackout(selected.id, id);
-      setBlackouts(await listBlackouts(selected.id));
+      await removeBlackout.mutateAsync({ courtId: selected.id, blackoutId: id });
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Could not delete blackout");
-    } finally {
-      setBusy(false);
+      setActionError(errMessage(err, "Could not delete blackout"));
     }
   }
 
@@ -258,15 +238,16 @@ export default function AdminCourtsPage() {
         <p className="text-sm rounded-lg border border-red-200 bg-red-50 text-red-800 px-4 py-3">{loadError}</p>
       )}
 
-      <form onSubmit={onCreate} className="flex flex-wrap gap-2 items-end">
+      <form onSubmit={createForm.handleSubmit(onCreate)} className="flex flex-wrap gap-2 items-end">
         <label className="space-y-1">
           <span className="block text-sm font-medium text-gray-700">New court</span>
-          <input
-            className={inputClass}
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Court name"
-            required
+          <Controller
+            name="name"
+            control={createForm.control}
+            rules={{ required: true }}
+            render={({ field }) => (
+              <input {...field} className={inputClass} placeholder="Court name" required />
+            )}
           />
         </label>
         <button className={primaryBtn} type="submit" disabled={busy}>
@@ -311,16 +292,17 @@ export default function AdminCourtsPage() {
             <div className="lg:col-span-2 space-y-6">
               <section className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
                 <h2 className="font-semibold text-green-800">Court</h2>
-                <div className="flex flex-wrap gap-2 items-end">
+                <form onSubmit={renameForm.handleSubmit(onSaveName)} className="flex flex-wrap gap-2 items-end">
                   <label className="space-y-1 flex-1 min-w-48">
                     <span className="block text-sm font-medium text-gray-700">Name</span>
-                    <input
-                      className={`${inputClass} w-full`}
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
+                    <Controller
+                      name="name"
+                      control={renameForm.control}
+                      rules={{ required: true }}
+                      render={({ field }) => <input {...field} className={`${inputClass} w-full`} />}
                     />
                   </label>
-                  <button className={primaryBtn} type="button" disabled={busy} onClick={() => void onSaveName()}>
+                  <button className={primaryBtn} type="submit" disabled={busy}>
                     Save name
                   </button>
                   <button
@@ -331,7 +313,7 @@ export default function AdminCourtsPage() {
                   >
                     {selected.active ? "Deactivate" : "Activate"}
                   </button>
-                </div>
+                </form>
 
                 {pendingDeactivateId === selected.id && (
                   <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-3 text-sm text-amber-950">
@@ -360,10 +342,13 @@ export default function AdminCourtsPage() {
                 )}
               </section>
 
-              <section className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+              <form
+                onSubmit={hoursForm.handleSubmit(onSaveHours)}
+                className="bg-white border border-gray-200 rounded-xl p-5 space-y-4"
+              >
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="font-semibold text-green-800">Weekly hours</h2>
-                  <button className={primaryBtn} type="button" disabled={busy} onClick={() => void onSaveHours()}>
+                  <button className={primaryBtn} type="submit" disabled={busy}>
                     Save hours
                   </button>
                 </div>
@@ -374,47 +359,53 @@ export default function AdminCourtsPage() {
                   {WEEKDAY_ORDER.map((day) => (
                     <div key={day} className="flex flex-wrap items-center gap-3 text-sm">
                       <label className="w-28 flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={hours[day].open}
-                          onChange={(e) =>
-                            setHours((prev) => ({
-                              ...prev,
-                              [day]: { ...prev[day], open: e.target.checked },
-                            }))
-                          }
+                        <Controller
+                          name={`${day}.open` as Path<HourDraft>}
+                          control={hoursForm.control}
+                          render={({ field }) => (
+                            <input
+                              type="checkbox"
+                              checked={Boolean(field.value)}
+                              onChange={(e) => field.onChange(e.target.checked)}
+                              onBlur={field.onBlur}
+                              ref={field.ref}
+                              name={field.name}
+                            />
+                          )}
                         />
                         {WEEKDAY_LABEL[day]}
                       </label>
-                      <input
-                        type="time"
-                        className={inputClass}
-                        disabled={!hours[day].open}
-                        value={hours[day].startLocal}
-                        onChange={(e) =>
-                          setHours((prev) => ({
-                            ...prev,
-                            [day]: { ...prev[day], startLocal: e.target.value },
-                          }))
-                        }
+                      <Controller
+                        name={`${day}.startLocal` as Path<HourDraft>}
+                        control={hoursForm.control}
+                        render={({ field }) => (
+                          <input
+                            {...field}
+                            type="time"
+                            className={inputClass}
+                            disabled={!hours[day]?.open}
+                            value={String(field.value ?? "")}
+                          />
+                        )}
                       />
                       <span className="text-gray-400">to</span>
-                      <input
-                        type="time"
-                        className={inputClass}
-                        disabled={!hours[day].open}
-                        value={hours[day].endLocal}
-                        onChange={(e) =>
-                          setHours((prev) => ({
-                            ...prev,
-                            [day]: { ...prev[day], endLocal: e.target.value },
-                          }))
-                        }
+                      <Controller
+                        name={`${day}.endLocal` as Path<HourDraft>}
+                        control={hoursForm.control}
+                        render={({ field }) => (
+                          <input
+                            {...field}
+                            type="time"
+                            className={inputClass}
+                            disabled={!hours[day]?.open}
+                            value={String(field.value ?? "")}
+                          />
+                        )}
                       />
                     </div>
                   ))}
                 </div>
-              </section>
+              </form>
 
               <section className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
                 <h2 className="font-semibold text-green-800">Blackouts</h2>
@@ -443,33 +434,37 @@ export default function AdminCourtsPage() {
                     ))}
                   </ul>
                 )}
-                <form onSubmit={onAddBlackout} className="flex flex-wrap gap-2 items-end">
+                <form
+                  onSubmit={blackoutForm.handleSubmit(onAddBlackout)}
+                  className="flex flex-wrap gap-2 items-end"
+                >
                   <label className="space-y-1">
                     <span className="block text-xs font-medium text-gray-600">Start date</span>
-                    <input
-                      type="date"
-                      required
-                      className={inputClass}
-                      value={boStart}
-                      onChange={(e) => setBoStart(e.target.value)}
+                    <Controller
+                      name="start"
+                      control={blackoutForm.control}
+                      rules={{ required: true }}
+                      render={({ field }) => (
+                        <input {...field} type="date" required className={inputClass} />
+                      )}
                     />
                   </label>
                   <label className="space-y-1">
                     <span className="block text-xs font-medium text-gray-600">End date</span>
-                    <input
-                      type="date"
-                      className={inputClass}
-                      value={boEnd}
-                      onChange={(e) => setBoEnd(e.target.value)}
+                    <Controller
+                      name="end"
+                      control={blackoutForm.control}
+                      render={({ field }) => <input {...field} type="date" className={inputClass} />}
                     />
                   </label>
                   <label className="space-y-1">
                     <span className="block text-xs font-medium text-gray-600">Reason</span>
-                    <input
-                      className={inputClass}
-                      value={boReason}
-                      onChange={(e) => setBoReason(e.target.value)}
-                      placeholder="Optional"
+                    <Controller
+                      name="reason"
+                      control={blackoutForm.control}
+                      render={({ field }) => (
+                        <input {...field} className={inputClass} placeholder="Optional" />
+                      )}
                     />
                   </label>
                   <button className={primaryBtn} type="submit" disabled={busy}>
