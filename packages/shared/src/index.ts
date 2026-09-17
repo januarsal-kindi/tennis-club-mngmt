@@ -95,3 +95,30 @@ export const createBlackoutSchema = z
     message: 'end must be after start',
     path: ['end'],
   });
+
+export const timeBlockKindSchema = z.enum(['booking', 'session']);
+export type TimeBlockKind = z.infer<typeof timeBlockKindSchema>;
+
+const ymd = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD');
+
+export const availabilityQuerySchema = z.object({
+  courtId: z.string().uuid(),
+  date: ymd,
+});
+
+export const availabilitySlotSchema = z.object({
+  start: z.string().datetime(),
+  end: z.string().datetime(),
+});
+export type AvailabilitySlot = z.infer<typeof availabilitySlotSchema>;
+
+export const availabilityResponseSchema = z.object({
+  courtId: z.string().uuid(),
+  date: ymd,
+  timezone: z.string().min(1),
+  slotMinutes: z.literal(30),
+  slots: z.array(availabilitySlotSchema),
+});
+export type AvailabilityResponse = z.infer<typeof availabilityResponseSchema>;
