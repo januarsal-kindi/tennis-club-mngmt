@@ -1,7 +1,9 @@
+import { ROUTES } from "@/shared/config";
+
 const CUSTOMER_SECTIONS = [
-  { label: "Book a Court", href: "#", desc: "Check availability and reserve a court" },
+  { label: "Book a Court", href: ROUTES.customer.book, desc: "Check availability and reserve a court" },
   { label: "Coaching Sessions", href: "#", desc: "Browse and enroll in upcoming sessions" },
-  { label: "My Bookings", href: "#", desc: "View and manage your reservations" },
+  { label: "My Bookings", href: ROUTES.customer.bookings, desc: "View and manage your reservations" },
   { label: "My Level", href: "#", desc: "Track your club NTRP-style rating (1.5–5.5) and growth chart" },
 ] as const;
 

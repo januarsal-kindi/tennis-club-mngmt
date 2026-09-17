@@ -43,22 +43,28 @@ function toApiError(err: unknown): ApiError {
   return new ApiError(0, "UNKNOWN", err instanceof Error ? err.message : "Request failed");
 }
 
-/** Probe result for GET /courts — never treat 5xx as "use mock". */
-export type CourtsProbe = "live" | "missing" | "error";
+/** Probe result — never treat 5xx as "use mock". */
+export type RouteProbe = "live" | "missing" | "error";
+export type CourtsProbe = RouteProbe;
 
-export async function probeCourtsRoute(): Promise<CourtsProbe> {
+/**
+ * GET a route to see if the backend mounted it.
+ * 2xx / 400 (validation) / 401 / 403 → live. 404 → missing. 5xx/network → error.
+ */
+export async function probeRoute(path: string): Promise<RouteProbe> {
   try {
-    await http.get("/courts");
+    await http.get(path);
     return "live";
   } catch (err) {
     if (err instanceof ApiError) {
-      // 2xx handled above; 401 / 403 → courts router is present.
-      if (err.status === 401 || err.status === 403) return "live";
-      // 404 → route not mounted yet.
+      if (err.status === 400 || err.status === 401 || err.status === 403) return "live";
       if (err.status === 404) return "missing";
-      // 5xx / other → fail closed (caller must not sticky-mock).
       return "error";
     }
     return "error";
   }
+}
+
+export async function probeCourtsRoute(): Promise<CourtsProbe> {
+  return probeRoute("/courts");
 }
