@@ -27,14 +27,16 @@ model ClubSettings {
 }
 
 model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
-  passwordHash String    @map("password_hash")
-  name         String
-  role         Role      @default(member)
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  sessions     Session[]
+  id                     String         @id @default(uuid())
+  email                  String         @unique
+  passwordHash           String         @map("password_hash")
+  name                   String
+  role                   Role           @default(member)
+  createdAt              DateTime       @default(now()) @map("created_at")
+  updatedAt              DateTime       @updatedAt @map("updated_at")
+  sessions               Session[]
+  bookings               CourtBooking[]
+  bookingsCreatedAsAdmin CourtBooking[] @relation("BookingCreatedByAdmin")
 
   @@map("users")
 }
@@ -65,6 +67,7 @@ model Court {
   weeklyHours CourtWeeklyHour[]
   blackouts   CourtBlackout[]
   timeBlocks  CourtTimeBlock[]
+  bookings    CourtBooking[]
 
   @@map("courts")
 }
@@ -103,7 +106,58 @@ model CourtTimeBlock {
   refId     String?        @map("ref_id")
   createdAt DateTime       @default(now()) @map("created_at")
   court     Court          @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  booking   CourtBooking?
 
   @@index([courtId])
   @@map("court_time_blocks")
+}
+
+enum BookingStatus {
+  confirmed
+  cancelled
+}
+
+enum PaymentSubjectType {
+  booking
+  enrollment
+}
+
+enum PaymentStatus {
+  unpaid
+  pending_verification
+  paid
+  waived
+}
+
+model CourtBooking {
+  id               String        @id @default(uuid())
+  courtId          String        @map("court_id")
+  userId           String        @map("user_id")
+  blockId          String?       @unique @map("block_id")
+  start            DateTime      @db.Timestamptz(3)
+  end              DateTime      @db.Timestamptz(3)
+  createdByAdminId String?       @map("created_by_admin_id")
+  status           BookingStatus @default(confirmed)
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  court            Court         @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  block            CourtTimeBlock? @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  createdByAdmin   User?         @relation("BookingCreatedByAdmin", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([courtId])
+  @@index([userId])
+  @@map("court_bookings")
+}
+
+model Payment {
+  id          String             @id @default(uuid())
+  subjectType PaymentSubjectType @map("subject_type")
+  subjectId   String             @map("subject_id")
+  status      PaymentStatus      @default(unpaid)
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+
+  @@unique([subjectType, subjectId])
+  @@map("payments")
 }

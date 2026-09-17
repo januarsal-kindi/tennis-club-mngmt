@@ -122,3 +122,54 @@ export const availabilityResponseSchema = z.object({
   slots: z.array(availabilitySlotSchema),
 });
 export type AvailabilityResponse = z.infer<typeof availabilityResponseSchema>;
+
+export const bookingStatusSchema = z.enum(['confirmed', 'cancelled']);
+export type BookingStatus = z.infer<typeof bookingStatusSchema>;
+
+export const paymentStatusSchema = z.enum([
+  'unpaid',
+  'pending_verification',
+  'paid',
+  'waived',
+]);
+export type PaymentStatus = z.infer<typeof paymentStatusSchema>;
+
+export const paymentSubjectTypeSchema = z.enum(['booking', 'enrollment']);
+export type PaymentSubjectType = z.infer<typeof paymentSubjectTypeSchema>;
+
+export const createBookingSchema = z
+  .object({
+    courtId: z.string().uuid(),
+    start: z.string().datetime(),
+    end: z.string().datetime(),
+    memberId: z.string().uuid().optional(),
+  })
+  .refine((b) => new Date(b.end) > new Date(b.start), {
+    message: 'end must be after start',
+    path: ['end'],
+  });
+export type CreateBooking = z.infer<typeof createBookingSchema>;
+
+export const courtBookingSchema = z.object({
+  id: z.string().uuid(),
+  courtId: z.string().uuid(),
+  userId: z.string().uuid(),
+  blockId: z.string().uuid().nullable(),
+  start: z.string().datetime(),
+  end: z.string().datetime(),
+  createdByAdminId: z.string().uuid().nullable(),
+  status: bookingStatusSchema,
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  paymentStatus: paymentStatusSchema,
+});
+export type CourtBooking = z.infer<typeof courtBookingSchema>;
+
+export const mineBookingsQuerySchema = z.object({
+  includeCancelled: z.enum(['true', 'false']).optional(),
+});
+
+export const adminBookingsQuerySchema = z.object({
+  courtId: z.string().uuid().optional(),
+  date: ymd.optional(),
+});
