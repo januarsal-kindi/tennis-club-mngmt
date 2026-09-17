@@ -5,6 +5,7 @@ export {
   availabilityKeys,
   getAvailability,
   useAvailabilityQuery,
+  useClubTimezoneQuery,
   type Availability,
   type AvailabilitySlot,
   type AvailabilitySource,

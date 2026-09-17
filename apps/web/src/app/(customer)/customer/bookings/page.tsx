@@ -6,6 +6,7 @@ import {
   bookingsApiSource,
   canSelfCancel,
   useCancelBookingMutation,
+  useClubTimezoneQuery,
   useCourtsQuery,
   useMyBookingsQuery,
   type CourtBooking,
@@ -20,8 +21,9 @@ function errMessage(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
 }
 
-function formatRange(start: string, end: string) {
+function formatRange(start: string, end: string, timeZone: string) {
   const opts: Intl.DateTimeFormatOptions = {
+    timeZone,
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -31,6 +33,7 @@ function formatRange(start: string, end: string) {
   };
   const startLabel = new Intl.DateTimeFormat("en-GB", opts).format(new Date(start));
   const endLabel = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
@@ -46,11 +49,13 @@ function paymentLabel(status: CourtBooking["paymentStatus"]) {
 export default function MyBookingsPage() {
   const bookingsQuery = useMyBookingsQuery();
   const courtsQuery = useCourtsQuery();
+  const tzQuery = useClubTimezoneQuery();
   const cancelBooking = useCancelBookingMutation();
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   const bookings = bookingsQuery.data ?? [];
+  const timeZone = tzQuery.data;
   const courtsById = new Map((courtsQuery.data ?? []).map((c) => [c.id, c.name]));
   const source = bookingsQuery.isSuccess ? bookingsApiSource() : null;
   const loadError =
@@ -105,7 +110,9 @@ export default function MyBookingsPage() {
               >
                 <div>
                   <p className="font-semibold text-green-900">{courtsById.get(b.courtId) ?? "Court"}</p>
-                  <p className="text-sm text-gray-600">{formatRange(b.start, b.end)}</p>
+                  <p className="text-sm text-gray-600">
+                    {timeZone ? formatRange(b.start, b.end, timeZone) : "Loading time…"}
+                  </p>
                   <p className="text-xs text-gray-500 mt-1">
                     {b.status === "confirmed" ? "Confirmed" : "Cancelled"} · Payment {paymentLabel(b.paymentStatus)}
                   </p>

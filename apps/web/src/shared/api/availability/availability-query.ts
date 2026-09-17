@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getAvailability } from "./availability";
+import { getAvailability, getClubTimezone } from "./availability";
 
 export const availabilityKeys = {
   all: ["availability"] as const,
@@ -13,6 +13,15 @@ export function useAvailabilityQuery(courtId: string | null, date: string | null
     queryKey: availabilityKeys.slots(courtId ?? "", date ?? ""),
     queryFn: () => getAvailability(courtId!, date!),
     enabled: Boolean(courtId && date),
+    retry: false,
+  });
+}
+
+export function useClubTimezoneQuery() {
+  return useQuery({
+    queryKey: [...availabilityKeys.all, "timezone"] as const,
+    queryFn: getClubTimezone,
+    staleTime: Infinity,
     retry: false,
   });
 }

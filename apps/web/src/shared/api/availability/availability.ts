@@ -81,7 +81,7 @@ async function mockAvailability(courtId: string, date: string): Promise<Availabi
   const court = courts.find((c) => c.id === courtId);
   if (!court) throw new ApiError(404, "NOT_FOUND", "Court not found");
 
-  const timezone = await clubTimezone();
+  const timezone = await getClubTimezone();
   const empty: Availability = { courtId, date, timezone, slotMinutes: SLOT_MINUTES, slots: [] };
   if (!court.active) return empty;
 
@@ -109,7 +109,7 @@ async function mockAvailability(courtId: string, date: string): Promise<Availabi
   return { courtId, date, timezone, slotMinutes: SLOT_MINUTES, slots };
 }
 
-async function clubTimezone(): Promise<string> {
+export async function getClubTimezone(): Promise<string> {
   try {
     const { data } = await http.get<unknown>("/club-settings");
     if (data && typeof data === "object" && "timezone" in data) {
