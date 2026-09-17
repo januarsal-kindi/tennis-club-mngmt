@@ -1,4 +1,8 @@
-import { ConflictException, INestApplication } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  INestApplication,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Role, TimeBlockKind } from '@prisma/client';
 import * as request from 'supertest';
@@ -78,16 +82,21 @@ describe('BE-4 occupancy & availability', () => {
       ),
     ).rejects.toBeInstanceOf(ConflictException);
 
-    await expect(
-      prisma.courtTimeBlock.create({
+    const bypass = await prisma.courtTimeBlock
+      .create({
         data: {
           courtId,
           start: utc(10, 15),
           end: utc(10, 45),
           kind: TimeBlockKind.session,
         },
-      }),
-    ).rejects.toThrow();
+      })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(bypass).not.toBeNull();
+    expect(exclusionSignal(bypass)).toMatch(/23P01|court_time_blocks_no_overlap/);
 
     const adjacent = await prisma.$transaction((tx) =>
       occupancy.insertBlock(tx, {
@@ -105,6 +114,32 @@ describe('BE-4 occupancy & availability', () => {
       utc(12, 0),
     );
     expect(listed).toHaveLength(2);
+  });
+
+  it('insertBlock sees court deactivate in the same transaction', async () => {
+    const courtId = await seedCourtWithHours('Tx Court');
+
+    await expect(
+      prisma.$transaction(async (tx) => {
+        await tx.court.update({
+          where: { id: courtId },
+          data: { active: false },
+        });
+        await occupancy.insertBlock(tx, {
+          courtId,
+          start: utc(10, 0),
+          end: utc(11, 0),
+          kind: TimeBlockKind.booking,
+        });
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(
+      await prisma.courtTimeBlock.count({ where: { courtId } }),
+    ).toBe(0);
+    expect((await prisma.court.findUnique({ where: { id: courtId } }))?.active).toBe(
+      true,
+    );
   });
 
   it('availability subtracts hours, blackouts, and blocks; inactive court is empty', async () => {
@@ -176,17 +211,19 @@ describe('BE-4 occupancy & availability', () => {
       .expect(401);
     expect(unauth.body.code).toBe('UNAUTHORIZED');
 
-    await request(app.getHttpServer())
+    const badDate = await request(app.getHttpServer())
       .get('/api/v1/availability')
       .query({ courtId, date: '17-09-2026' })
       .set('Cookie', memberCookie)
       .expect(400);
+    expect(badDate.body.code).toBe('VALIDATION');
 
-    await request(app.getHttpServer())
+    const missing = await request(app.getHttpServer())
       .get('/api/v1/availability')
       .query({ courtId: '00000000-0000-4000-8000-000000000000', date: DATE })
       .set('Cookie', memberCookie)
       .expect(404);
+    expect(missing.body.code).toBe('NOT_FOUND');
   });
 
   async function seedCourtWithHours(name: string): Promise<string> {
@@ -209,6 +246,32 @@ describe('BE-4 occupancy & availability', () => {
 
 function utc(hour: number, minute: number): Date {
   return new Date(Date.UTC(2026, 8, 17, hour, minute, 0));
+}
+
+function exclusionSignal(error: unknown): string {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    const rec = current as {
+      code?: unknown;
+      message?: unknown;
+      meta?: { constraint?: unknown };
+      cause?: unknown;
+    };
+    if (typeof rec.code === 'string') {
+      parts.push(rec.code);
+    }
+    if (typeof rec.message === 'string') {
+      parts.push(rec.message);
+    }
+    if (typeof rec.meta?.constraint === 'string') {
+      parts.push(rec.meta.constraint);
+    }
+    current = rec.cause;
+  }
+  return parts.join('\n');
 }
 
 function cookieHeader(res: request.Response): string {

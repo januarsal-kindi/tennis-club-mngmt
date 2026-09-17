@@ -4,9 +4,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Court, CourtTimeBlock, Prisma, TimeBlockKind } from '@prisma/client';
+import {
+  Court,
+  CourtTimeBlock,
+  Prisma,
+  PrismaClient,
+  TimeBlockKind,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SLOT_MINUTES } from './occupancy.constants';
+
+export type OccupancyDb = Prisma.TransactionClient | PrismaClient;
 
 export type InsertBlockInput = {
   courtId: string;
@@ -31,11 +39,11 @@ export class OccupancyService {
   constructor(private readonly prisma: PrismaService) {}
 
   async insertBlock(
-    tx: Prisma.TransactionClient,
+    tx: OccupancyDb,
     input: InsertBlockInput,
   ): Promise<CourtTimeBlock> {
     this.requireRange(input.start, input.end);
-    await this.assertBookable(input.courtId, input.start, input.end);
+    await this.assertBookable(input.courtId, input.start, input.end, tx);
 
     try {
       return await tx.courtTimeBlock.create({
@@ -55,14 +63,19 @@ export class OccupancyService {
     }
   }
 
-  async assertBookable(courtId: string, start: Date, end: Date): Promise<void> {
+  async assertBookable(
+    courtId: string,
+    start: Date,
+    end: Date,
+    tx: OccupancyDb = this.prisma,
+  ): Promise<void> {
     this.requireRange(start, end);
-    const court = await this.requireCourt(courtId);
+    const court = await this.requireCourt(courtId, tx);
     if (!court.active) {
       throw new BadRequestException('Court is not active');
     }
 
-    const timezone = await this.clubTimezone();
+    const timezone = await this.clubTimezone(tx);
     const startDay = localYmd(start, timezone);
     const endDay = localYmd(end, timezone);
     const endParts = zonedParts(end, timezone);
@@ -75,7 +88,7 @@ export class OccupancyService {
     }
 
     const weekday = weekdayOfYmd(startDay);
-    const hours = await this.prisma.courtWeeklyHour.findUnique({
+    const hours = await tx.courtWeeklyHour.findUnique({
       where: { courtId_weekday: { courtId, weekday } },
     });
     if (!hours) {
@@ -91,7 +104,7 @@ export class OccupancyService {
       throw new BadRequestException('Range is outside weekly hours');
     }
 
-    const blackout = await this.prisma.courtBlackout.findFirst({
+    const blackout = await tx.courtBlackout.findFirst({
       where: { courtId, start: { lt: end }, end: { gt: start } },
     });
     if (blackout) {
@@ -219,16 +232,19 @@ export class OccupancyService {
     }
   }
 
-  private async requireCourt(id: string): Promise<Court> {
-    const court = await this.prisma.court.findUnique({ where: { id } });
+  private async requireCourt(
+    id: string,
+    tx: OccupancyDb = this.prisma,
+  ): Promise<Court> {
+    const court = await tx.court.findUnique({ where: { id } });
     if (!court) {
       throw new NotFoundException('Court not found');
     }
     return court;
   }
 
-  private async clubTimezone(): Promise<string> {
-    const settings = await this.prisma.clubSettings.findUnique({
+  private async clubTimezone(tx: OccupancyDb = this.prisma): Promise<string> {
+    const settings = await tx.clubSettings.findUnique({
       where: { id: 1 },
     });
     if (!settings) {
@@ -239,11 +255,15 @@ export class OccupancyService {
 }
 
 function isOverlapConflict(error: unknown): boolean {
-  if (typeof error === 'object' && error !== null) {
-    const rec = error as {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    const rec = current as {
       code?: unknown;
       message?: unknown;
       meta?: { constraint?: unknown };
+      cause?: unknown;
     };
     if (rec.code === '23P01') {
       return true;
@@ -261,6 +281,7 @@ function isOverlapConflict(error: unknown): boolean {
     ) {
       return true;
     }
+    current = rec.cause;
   }
   return false;
 }
