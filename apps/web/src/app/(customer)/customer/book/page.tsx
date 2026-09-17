@@ -8,6 +8,7 @@ import {
   availabilityApiSource,
   bookingsApiSource,
   useAvailabilityQuery,
+  useClubTimezoneQuery,
   useCreateBookingMutation,
   useCourtsQuery,
   type AvailabilitySlot,
@@ -21,7 +22,15 @@ const primaryBtn =
 
 type FilterValues = { courtId: string; date: string };
 
-function todayYmd(): string {
+function todayYmd(timeZone?: string): string {
+  if (timeZone) {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  }
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -41,10 +50,11 @@ function formatTime(iso: string, timeZone: string) {
 
 export default function BookCourtPage() {
   const courtsQuery = useCourtsQuery();
+  const tzQuery = useClubTimezoneQuery();
   const createBooking = useCreateBookingMutation();
   const courts = (courtsQuery.data ?? []).filter((c) => c.active);
 
-  const { control, watch, setValue } = useForm<FilterValues>({
+  const { control, watch, setValue, formState } = useForm<FilterValues>({
     defaultValues: { courtId: "", date: todayYmd() },
   });
   const courtId = watch("courtId");
@@ -63,6 +73,11 @@ export default function BookCourtPage() {
       setValue("courtId", first.id);
     }
   }, [courts, courtId, setValue]);
+
+  useEffect(() => {
+    if (!tzQuery.data || formState.dirtyFields.date) return;
+    setValue("date", todayYmd(tzQuery.data));
+  }, [tzQuery.data, formState.dirtyFields.date, setValue]);
 
   const slots = (availabilityQuery.data?.slots ?? []).filter((s) => new Date(s.end).getTime() > Date.now());
   const timeZone = availabilityQuery.data?.timezone ?? "UTC";
