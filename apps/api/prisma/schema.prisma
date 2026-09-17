@@ -51,6 +51,11 @@ model Session {
   @@map("sessions")
 }
 
+enum TimeBlockKind {
+  booking
+  session
+}
+
 model Court {
   id          String            @id @default(uuid())
   name        String
@@ -59,6 +64,7 @@ model Court {
   updatedAt   DateTime          @updatedAt @map("updated_at")
   weeklyHours CourtWeeklyHour[]
   blackouts   CourtBlackout[]
+  timeBlocks  CourtTimeBlock[]
 
   @@map("courts")
 }
@@ -85,4 +91,19 @@ model CourtBlackout {
 
   @@index([courtId])
   @@map("court_blackouts")
+}
+
+/// Occupancy holds. `during tstzrange` + gist exclusion live in SQL only (BE-4).
+model CourtTimeBlock {
+  id        String         @id @default(uuid())
+  courtId   String         @map("court_id")
+  start     DateTime       @db.Timestamptz(3)
+  end       DateTime       @db.Timestamptz(3)
+  kind      TimeBlockKind
+  refId     String?        @map("ref_id")
+  createdAt DateTime       @default(now()) @map("created_at")
+  court     Court          @relation(fields: [courtId], references: [id], onDelete: Cascade)
+
+  @@index([courtId])
+  @@map("court_time_blocks")
 }
