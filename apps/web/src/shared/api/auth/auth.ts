@@ -1,6 +1,6 @@
 import type { Role } from "@/shared/config";
 import { clearRoleHintCookie, isRole, setRoleHintCookie } from "@/shared/auth";
-import { apiFetch } from "./client";
+import { http } from "../client";
 
 export type PublicUser = {
   id: string;
@@ -35,12 +35,8 @@ function asPublicUser(data: unknown): PublicUser {
 
 /** POST /api/v1/auth/login — sets HttpOnly `tc_session`; also writes role hint for middleware. */
 export async function login(email: string, password: string): Promise<PublicUser> {
-  const user = asPublicUser(
-    await apiFetch<unknown>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    }),
-  );
+  const { data } = await http.post<unknown>("/auth/login", { email, password });
+  const user = asPublicUser(data);
   setRoleHintCookie(user.role);
   return user;
 }
@@ -48,7 +44,7 @@ export async function login(email: string, password: string): Promise<PublicUser
 /** POST /api/v1/auth/logout — clears `tc_session` and role hint. */
 export async function logout(): Promise<void> {
   try {
-    await apiFetch<void>("/auth/logout", { method: "POST" });
+    await http.post("/auth/logout");
   } finally {
     clearRoleHintCookie();
   }
@@ -56,7 +52,8 @@ export async function logout(): Promise<void> {
 
 /** GET /api/v1/me — current user from session cookie. */
 export async function getMe(): Promise<PublicUser> {
-  const user = asPublicUser(await apiFetch<unknown>("/me"));
+  const { data } = await http.get<unknown>("/me");
+  const user = asPublicUser(data);
   setRoleHintCookie(user.role);
   return user;
 }

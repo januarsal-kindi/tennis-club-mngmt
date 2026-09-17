@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ApiError, login } from "@/shared/api";
+import { Controller, useForm } from "react-hook-form";
+import { ApiError, useLoginMutation } from "@/shared/api";
 import {
   ROLE_HINT_COOKIE,
   allowOfflineAuth,
@@ -12,6 +13,12 @@ import {
 } from "@/shared/auth";
 import type { Role } from "@/shared/config";
 
+type LoginValues = {
+  email: string;
+  password: string;
+  offlineRole: Role;
+};
+
 /**
  * Prefer BE-2 `POST /api/v1/auth/login` (HttpOnly `tc_session`).
  * Offline role hint (`tc_role`) is gated: NODE_ENV !== production or
@@ -20,18 +27,16 @@ import type { Role } from "@/shared/config";
 export default function LoginPage() {
   const router = useRouter();
   const offlineOk = allowOfflineAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [offlineRole, setOfflineRole] = useState<Role>("admin");
+  const loginMutation = useLoginMutation();
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { control, handleSubmit, formState } = useForm<LoginValues>({
+    defaultValues: { email: "", password: "", offlineRole: "admin" },
+  });
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    setBusy(true);
+  const onSubmit = handleSubmit(async ({ email, password, offlineRole }) => {
     setError(null);
     try {
-      const user = await login(email, password);
+      const user = await loginMutation.mutateAsync({ email, password });
       router.replace(portalForRole(user.role));
       router.refresh();
     } catch (err) {
@@ -59,10 +64,10 @@ export default function LoginPage() {
       }
 
       setError(err instanceof Error ? err.message : "Sign in failed");
-    } finally {
-      setBusy(false);
     }
-  }
+  });
+
+  const busy = formState.isSubmitting;
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-green-700">
@@ -71,36 +76,46 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-green-800">Tennis Club</h1>
           <p className="text-sm text-gray-500">Sign in to your portal</p>
         </div>
-        <form className="space-y-4" onSubmit={(e) => void onSubmit(e)}>
+        <form className="space-y-4" onSubmit={onSubmit}>
           <div className="space-y-1">
             <label className="block text-sm font-medium text-gray-700" htmlFor="email">
               Email
             </label>
-            <input
-              id="email"
+            <Controller
               name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              control={control}
+              rules={{ required: true }}
+              render={({ field }) => (
+                <input
+                  {...field}
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              )}
             />
           </div>
           <div className="space-y-1">
             <label className="block text-sm font-medium text-gray-700" htmlFor="password">
               Password
             </label>
-            <input
-              id="password"
+            <Controller
               name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              control={control}
+              rules={{ required: true, minLength: 8 }}
+              render={({ field }) => (
+                <input
+                  {...field}
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  minLength={8}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              )}
             />
           </div>
           {offlineOk && (
@@ -108,19 +123,28 @@ export default function LoginPage() {
               <label className="block text-sm font-medium text-gray-700" htmlFor="offlineRole">
                 Offline role (API down only)
               </label>
-              <select
-                id="offlineRole"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                value={offlineRole}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (isRole(v)) setOfflineRole(v);
-                }}
-              >
-                <option value="admin">admin</option>
-                <option value="member">member</option>
-                <option value="coach">coach</option>
-              </select>
+              <Controller
+                name="offlineRole"
+                control={control}
+                render={({ field }) => (
+                  <select
+                    id="offlineRole"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    value={field.value}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (isRole(v)) field.onChange(v);
+                    }}
+                    onBlur={field.onBlur}
+                    ref={field.ref}
+                    name={field.name}
+                  >
+                    <option value="admin">admin</option>
+                    <option value="member">member</option>
+                    <option value="coach">coach</option>
+                  </select>
+                )}
+              />
               <p className="text-xs text-gray-400">
                 Local demo only (`{ROLE_HINT_COOKIE}`). Disabled in production unless
                 NEXT_PUBLIC_ALLOW_OFFLINE_AUTH=true. Never used on 401/403.
