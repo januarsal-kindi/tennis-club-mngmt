@@ -79,6 +79,7 @@ export class BookingsController {
   }
 
   @Post('bookings/:id/cancel')
+  @HttpCode(200)
   @ApiOperation({
     summary:
       'Cancel a booking (booker if ≥2h before start; otherwise admin only)',
