@@ -26,7 +26,7 @@ export function availabilityApiSource(): AvailabilitySource | null {
 
 /**
  * Resolve live vs mock once.
- * - live sticks after GET /availability exists (2xx / 400 / 401 / 403)
+ * - live sticks after GET /availability exists (never silent-fallback)
  * - mock only when route missing AND offline/demo auth gate allows it
  * - 5xx / network → throw (fail closed)
  */

@@ -8,7 +8,7 @@ export type CourtBooking = {
   id: string;
   courtId: string;
   userId: string;
-  blockId: string;
+  blockId: string | null;
   start: string;
   end: string;
   status: BookingStatus;
@@ -38,7 +38,7 @@ export function bookingsApiSource(): BookingsSource | null {
 
 /**
  * Resolve live vs mock once.
- * - live sticks after GET /bookings/mine exists
+ * - live sticks after GET /bookings/mine exists (never silent-fallback)
  * - mock only when route missing AND offline/demo auth gate allows it
  * - 5xx / network → throw (fail closed)
  */
@@ -164,7 +164,7 @@ function asBooking(data: unknown): CourtBooking {
     id: nested.id,
     courtId: nested.courtId,
     userId: typeof nested.userId === "string" ? nested.userId : MOCK_USER_ID,
-    blockId: typeof nested.blockId === "string" ? nested.blockId : nested.id,
+    blockId: typeof nested.blockId === "string" ? nested.blockId : null,
     start: nested.start,
     end: nested.end,
     status: nested.status === "cancelled" ? "cancelled" : "confirmed",
