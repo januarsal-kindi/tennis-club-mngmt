@@ -1,5 +1,5 @@
 export { ApiError } from "./client";
-export { authKeys, getMe, login, logout, useLoginMutation, type PublicUser } from "./auth";
+export { authKeys, getMe, login, logout, useLoginMutation, useLogoutMutation, type PublicUser } from "./auth";
 export {
   availabilityApiSource,
   availabilityKeys,

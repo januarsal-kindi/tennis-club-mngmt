@@ -1,4 +1,4 @@
-import { NavLink } from "@/shared/ui";
+import { LogoutButton, NavLink } from "@/shared/ui";
 import { ROUTES } from "@/shared/config";
 
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
@@ -10,6 +10,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
           <NavLink href={ROUTES.customer.dashboard}>Home</NavLink>
           <NavLink href={ROUTES.customer.book}>Book</NavLink>
           <NavLink href={ROUTES.customer.bookings}>My bookings</NavLink>
+          <LogoutButton />
         </nav>
       </header>
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-8">{children}</main>
