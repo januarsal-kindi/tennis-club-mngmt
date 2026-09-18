@@ -122,6 +122,59 @@ describe('BE-2 auth, roles, club settings', () => {
       .send({ timezone: 'Not/AZone' })
       .expect(400);
   });
+
+  it('logout revokes the current session, clears tc_session, and stays 204 when repeated', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: 'admin@example.com', password: 'changeme-admin' })
+      .expect(200);
+    const sessionCookie = cookieHeader(login);
+
+    const logout = await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .set('Cookie', sessionCookie)
+      .expect(204);
+    expect(logout.text).toBe('');
+    expectSessionCookieCleared(logout);
+
+    const me = await request(app.getHttpServer())
+      .get('/api/v1/me')
+      .set('Cookie', sessionCookie)
+      .expect(401);
+    expect(me.body.code).toBe('UNAUTHORIZED');
+
+    const again = await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .set('Cookie', sessionCookie)
+      .expect(204);
+    expect(again.text).toBe('');
+    expectSessionCookieCleared(again);
+
+    const missing = await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .expect(204);
+    expect(missing.text).toBe('');
+    expectSessionCookieCleared(missing);
+  });
+
+  it('logout with Authorization Bearer revokes that session', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: 'admin@example.com', password: 'changeme-admin' })
+      .expect(200);
+    const sessionCookie = cookieHeader(login);
+    const token = sessionCookie.slice('tc_session='.length);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(204);
+
+    await request(app.getHttpServer())
+      .get('/api/v1/me')
+      .set('Cookie', sessionCookie)
+      .expect(401);
+  });
 });
 
 function cookieHeader(res: request.Response): string {
@@ -132,4 +185,27 @@ function cookieHeader(res: request.Response): string {
 
   const first = Array.isArray(raw) ? raw[0] : raw;
   return first.split(';')[0];
+}
+
+function expectSessionCookieCleared(res: request.Response): void {
+  const raw = res.headers['set-cookie'];
+  if (!raw) {
+    throw new Error('missing set-cookie');
+  }
+
+  const header = Array.isArray(raw) ? raw[0] : raw;
+  expect(header).toMatch(/^tc_session=/);
+  expect(header).toMatch(/Path=\//);
+  expect(header).toMatch(/HttpOnly/i);
+  expect(header).toMatch(/SameSite=Lax/i);
+
+  const maxAge = /Max-Age=(\d+)/i.exec(header);
+  if (maxAge) {
+    expect(Number(maxAge[1])).toBe(0);
+    return;
+  }
+
+  const expires = /Expires=([^;]+)/i.exec(header);
+  expect(expires).not.toBeNull();
+  expect(new Date(expires?.[1] ?? '').getTime()).toBeLessThan(Date.now());
 }

@@ -11,6 +11,7 @@ import {
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -73,7 +74,9 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Revoke the current session cookie' })
-  @ApiOkResponse({ description: 'Session cleared' })
+  @ApiNoContentResponse({
+    description: 'Session revoked if present; tc_session cookie cleared',
+  })
   async logout(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
