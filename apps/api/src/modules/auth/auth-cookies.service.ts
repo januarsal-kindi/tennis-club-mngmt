@@ -8,11 +8,16 @@ export class AuthCookiesService {
   constructor(private readonly config: ConfigService) {}
 
   setSession(response: Response, token: string): void {
-    response.cookie(SESSION_COOKIE, token, this.options());
+    response.cookie(SESSION_COOKIE, token, {
+      ...this.cookieFlags(),
+      maxAge: SESSION_TTL_MS,
+    });
   }
 
   clearSession(response: Response): void {
-    response.clearCookie(SESSION_COOKIE, this.options());
+    // Omit maxAge — passing SESSION_TTL_MS into clearCookie lets Express
+    // overwrite the epoch Expires and re-issue a live cookie.
+    response.clearCookie(SESSION_COOKIE, this.cookieFlags());
   }
 
   readToken(request: Request): string | undefined {
@@ -27,13 +32,12 @@ export class AuthCookiesService {
     return readCookie(request.headers.cookie, SESSION_COOKIE);
   }
 
-  private options(): CookieOptions {
+  private cookieFlags(): CookieOptions {
     return {
       httpOnly: true,
       sameSite: 'lax',
       secure: this.config.get<string>('NODE_ENV') === 'production',
       path: '/',
-      maxAge: SESSION_TTL_MS,
     };
   }
 }
