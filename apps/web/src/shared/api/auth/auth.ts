@@ -41,13 +41,10 @@ export async function login(email: string, password: string): Promise<PublicUser
   return user;
 }
 
-/** POST /api/v1/auth/logout — clears `tc_session` and role hint. */
+/** POST /api/v1/auth/logout — clears `tc_session`. Role hint only after 204 (AC4). */
 export async function logout(): Promise<void> {
-  try {
-    await http.post("/auth/logout");
-  } finally {
-    clearRoleHintCookie();
-  }
+  await http.post("/auth/logout");
+  clearRoleHintCookie();
 }
 
 /** GET /api/v1/me — current user from session cookie. */
