@@ -1,6 +1,28 @@
 export { ApiError } from "./client";
 export { authKeys, getMe, login, logout, useLoginMutation, type PublicUser } from "./auth";
 export {
+  availabilityApiSource,
+  availabilityKeys,
+  getAvailability,
+  useAvailabilityQuery,
+  useClubTimezoneQuery,
+  type Availability,
+  type AvailabilitySlot,
+  type AvailabilitySource,
+} from "./availability";
+export {
+  bookingsApiSource,
+  bookingsKeys,
+  canSelfCancel,
+  useCancelBookingMutation,
+  useCreateBookingMutation,
+  useMyBookingsQuery,
+  type BookingStatus,
+  type BookingsSource,
+  type CourtBooking,
+  type PaymentStatus,
+} from "./bookings";
+export {
   allDayRange,
   blackoutDateLabel,
   blackoutInclusiveEnd,

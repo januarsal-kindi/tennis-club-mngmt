@@ -8,5 +8,7 @@ export const ROUTES = {
   customer: {
     root: "/customer",
     dashboard: "/customer/dashboard",
+    book: "/customer/book",
+    bookings: "/customer/bookings",
   },
 } as const;
